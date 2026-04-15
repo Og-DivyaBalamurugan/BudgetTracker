@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Budget Tracker{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="page-header">
+    <h2>📊 Dashboard</h2>
+    <span class="month-label">{{ month }}/{{ year }}</span>
+</div>
+
+<!-- Warning Alerts -->
+{% if warnings %}
+<div class="warnings-section">
+    {% for w in warnings %}
+    <div class="alert alert-{{ w.status }}">
+        <span>{{ w.icon }} {{ w.name }}</span>
+        <span>
+            {% if w.status == 'danger' %}
+                🔴 Budget Exceeded! Spent ₹{{ w.spent }} of ₹{{ w.budget }} ({{ w.percentage }}%)
+            {% else %}
+                🟡 Almost at limit! Spent ₹{{ w.spent }} of ₹{{ w.budget }} ({{ w.percentage }}%)
+            {% endif %}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Summary Cards -->
+<div class="cards-grid">
+
+    <div class="card">
+        <div class="card-title">Total Income</div>
+        <div class="card-value income">₹{{ total_income }}</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Total Expenses</div>
+        <div class="card-value expense">₹{{ total_expense }}</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Balance</div>
+        <div class="card-value balance">₹{{ balance }}</div>
+    </div>
+
+</div>
+
+<!-- Charts -->
+<div class="charts-grid">
+
+    <!-- Donut Chart - Spending per category -->
+    <div class="chart-card">
+        <h3>Spending by Category</h3>
+        <div class="chart-container">
+            <canvas id="donutChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Bar Chart - Budget vs Actual -->
+    <div class="chart-card">
+        <h3>Budget vs Actual</h3>
+        <div class="chart-container">
+            <canvas id="barChart"></canvas>
+        </div>
+    </div>
+
+</div>
+
+<!-- Line Chart - Monthly Trend -->
+<div class="chart-card" style="margin-bottom: 30px;">
+    <h3>Monthly Spending Trend</h3>
+    <div class="chart-container">
+        <canvas id="lineChart"></canvas>
+    </div>
+</div>
+
+
+<!-- ML Predictions -->
+{% if predictions %}
+<div class="table-card" style="margin-bottom: 30px;">
+    <h3>🤖 Next Month Predictions</h3>
+    <p class="helper-text">
+        Based on your past spending patterns, 
+        here is what we predict you will spend next month.
+    </p>
+
+    <div class="predictions-grid">
+        {% for p in predictions %}
+        <div class="prediction-card">
+            
+            <div class="prediction-header">
+                <span class="prediction-category">
+                    {{ p.category_icon }} {{ p.category_name }}
+                </span>
+                <span class="prediction-badge">
+                    {{ p.months_of_data }} months data
+                </span>
+            </div>
+
+            <div class="prediction-amount">
+                ₹{{ p.predicted_amount }}
+            </div>
+
+            <div class="prediction-footer">
+                <span>Avg: ₹{{ p.avg_spending }}/month</span>
+            </div>
+
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% else %}
+<div class="table-card" style="margin-bottom: 30px;">
+    <h3>🤖 Next Month Predictions</h3>
+    <div class="empty-state">
+        <p>Not enough data yet. Add transactions for at least 2 months to see predictions!</p>
+    </div>
+</div>
+{% endif %}
+
+
+
+<!-- Recent Transactions -->
+<div class="table-card">
+    <h3>Recent Transactions</h3>
+
+    {% if recent_transactions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in recent_transactions %}
+            <tr>
+                <td>{{ t.date }}</td>
+                <td>{{ t.description }}</td>
+                <td>{{ t.category_icon }} {{ t.category_name }}</td>
+                <td>
+                    <span class="badge badge-{{ t.type }}">
+                        {{ t.type | capitalize }}
+                    </span>
+                </td>
+                <td class="{{ t.type }}">
+                    {% if t.type == 'income' %}
+                        + ₹{{ t.amount }}
+                    {% else %}
+                        - ₹{{ t.amount }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No transactions yet. Add some to see your dashboard come alive!</p>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Chart.js Scripts -->
+<script>
+    // ── Donut Chart ──
+    const donutCtx = document.getElementById('donutChart').getContext('2d');
+    new Chart(donutCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ donut_labels | tojson }},
+            datasets: [{
+                data: {{ donut_data | tojson }},
+                backgroundColor: [
+                    '#3498db', '#e74c3c', '#2ecc71',
+                    '#f39c12', '#9b59b6', '#1abc9c',
+                    '#e67e22', '#e91e63', '#00bcd4'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { size: 12 } }
+                }
+            }
+        }
+    });
+
+    // ── Bar Chart ──
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    new Chart(barCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ bar_labels | tojson }},
+            datasets: [
+                {
+                    label: 'Budget',
+                    data: {{ bar_budget | tojson }},
+                    backgroundColor: '#3498db',
+                    borderRadius: 6
+                },
+                {
+                    label: 'Spent',
+                    data: {{ bar_spent | tojson }},
+                    backgroundColor: '#e74c3c',
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { size: 12 } }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { font: { size: 11 } }
+                },
+                x: {
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+
+    // ── Line Chart ──
+    const lineCtx = document.getElementById('lineChart').getContext('2d');
+    new Chart(lineCtx, {
+        type: 'line',
+        data: {
+            labels: {{ line_labels | tojson }},
+            datasets: [{
+                label: 'Monthly Spending',
+                data: {{ line_data | tojson }},
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                borderWidth: 2,
+                pointBackgroundColor: '#3498db',
+                pointRadius: 5,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { size: 12 } }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { font: { size: 11 } }
+                },
+                x: {
+                    ticks: { font: { size: 11 } }
+                }
+            }
+        }
+    });
+</script>
+
+{% endblock %}
