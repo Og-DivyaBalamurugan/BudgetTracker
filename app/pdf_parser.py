@@ -4,6 +4,7 @@ import pdfplumber
 import re
 from datetime import datetime
 
+
 def parse_gpay_pdf(pdf_file):
     transactions = []
     try:
@@ -26,27 +27,36 @@ def extract_transactions_from_text(text):
     for line in lines:
         line = line.strip()
 
-        # Each transaction line looks like:
-        # "04Jan,2026 PaidtoZomato ₹110"
-        # "04Jan,2026 ReceivedfromJayanthiBalamurugan ₹1,213"
-        # Match date at start + transaction + amount at end
-
-        # Pattern: date, then description, then ₹amount
+        # Match pattern: date + Paidto/Receivedfrom + name + amount
         match = re.match(
             r'^(\d{2}\w{3},\d{4})\s+(Paidto|Receivedfrom)(.+?)\s+₹([\d,]+\.?\d*)$',
             line
         )
 
         if match:
-            date_str = match.group(1)       # "04Jan,2026"
-            direction = match.group(2)       # "Paidto" or "Receivedfrom"
-           # Fix merged words by adding space before capitals
+            date_str = match.group(1)
+            direction = match.group(2)
             raw_name = match.group(3).strip()
+            amount_str = match.group(4).replace(',', '')
+
+            # Convert date "04Jan,2026" → "2026-01-04"
+            try:
+                date_obj = datetime.strptime(date_str, '%d%b,%Y')
+                formatted_date = date_obj.strftime('%Y-%m-%d')
+            except:
+                continue
+
+            # Determine transaction type
+            if direction == 'Paidto':
+                transaction_type = 'expense'
+            else:
+                transaction_type = 'income'
+
+            # Fix camelCase: JayanthiBalamurugan → Jayanthi Balamurugan
             name = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', raw_name)
             name = re.sub(r'(?<=[A-Z])(?=[A-Z][a-z])', ' ', name)
-            
-            # Fix ALL CAPS merging using known word boundaries
-            # Splits before common capitalized words
+
+            # Fix ALL CAPS merged words
             split_words = [
                 'DEPARTMENT', 'STORE', 'NEEDS', 'DAILY', 'BANK',
                 'PAID', 'STATE', 'INDIA', 'BAKERY', 'FOODS', 'FRESH',
@@ -58,30 +68,19 @@ def extract_transactions_from_text(text):
                 'TECHNOLOGIES', 'PREPAID', 'PAY', 'PAYMENTS',
                 'KESAVARAMAN', 'SANDILASSEGARIN', 'SUJATHA',
                 'MANIKANDAN', 'ARAVINDHAN', 'INDUMATHI', 'BREMAVATHY',
-                'CHANDRASEKAR', 'ELUMALAI', 'RAJAGOPALAN', 'BALADUR',
+                'CHANDRASEKAR', 'ELUMALAI', 'RAJAGOPALAN',
                 'GURANG', 'JAIN', 'DREAM', 'SRINIVASA', 'RAJESWARI',
-                'VALARMATHI', 'SRINIVASAN', 'PASUMAI', 'ELECTRIC'
+                'VALARMATHI', 'SRINIVASAN', 'PASUMAI', 'ELECTRIC',
+                'POOJA', 'VENKATA', 'NAGAR', 'PONLAIT', 'SWEET',
+                'KALYANI', 'DAYANA', 'VASANTHAM', 'AHAMED', 'NASEER',
+                'SANGEETHA', 'JAYASANKAR', 'BAHADUR', 'HIRABAHADU'
             ]
+
             for word in split_words:
                 name = name.replace(word, ' ' + word)
-            
-            # Clean up any double spaces
+
+            # Clean up double spaces
             name = ' '.join(name.split())
-
-            amount_str = match.group(4).replace(',', '')  # "110"
-
-            # Convert date "04Jan,2026" → "2026-01-04"
-            try:
-                date_obj = datetime.strptime(date_str, '%d%b,%Y')
-                formatted_date = date_obj.strftime('%Y-%m-%d')
-            except:
-                continue
-
-            # Determine type
-            if direction == 'Paidto':
-                transaction_type = 'expense'
-            else:
-                transaction_type = 'income'
 
             try:
                 amount = float(amount_str)
@@ -108,7 +107,12 @@ def categorize_gpay_transaction(description):
         'kitchen', 'hotel', 'mess', 'meals', 'biryani',
         'pazhamudir', 'nilayam', 'indian coffee', 'venkateshwara',
         'grand bakery', 'fresh bakers', 'daily needs', 'corner',
-        'dreamfoods', 'rainbow'
+        'dreamfoods', 'rainbow', 'sweet', 'jain', 'ponlait',
+        'nellai', 'santhi', 'department store', 'provision',
+        'grocery', 'vegetable', 'fruit', 'juice', 'tea',
+        'canteen', 'tiffin', 'saravana', 'murugan',
+        'idli', 'dosa', 'parotta', 'rice', 'biriyani',
+        'vasantham', 'pooja stor'
     ]
 
     bills_keywords = [
@@ -116,38 +120,42 @@ def categorize_gpay_transaction(description):
         'electricity', 'electric', 'power', 'water',
         'internet', 'broadband', 'recharge', 'bill',
         'tangedco', 'tneb', 'bescom', 'mseb', 'myjio',
-        'jioprepaid', 'department puducherry'
+        'jioprepaid', 'department puducherry', 'prepaid',
+        'postpaid', 'dth', 'tatasky', 'sun direct',
+        'gas', 'indane', 'bharat gas', 'hp gas'
     ]
 
     shopping_keywords = [
         'amazon', 'flipkart', 'myntra', 'meesho',
         'snapdeal', 'nykaa', 'ajio', 'mall', 'store',
         'market', 'shop', 'mart', 'retail', 'traders',
-        'shaan', 'jaink'
+        'shaan', 'jaink', 'sangeetha'
     ]
 
     transport_keywords = [
         'uber', 'ola', 'rapido', 'petrol', 'fuel',
         'bunk', 'metro', 'bus', 'train', 'irctc',
-        'redbus', 'auto'
+        'redbus', 'auto', 'parking', 'toll'
     ]
 
     health_keywords = [
         'pharmacy', 'medical', 'hospital', 'clinic',
         'doctor', 'apollo', 'lab', 'diagnostic',
-        'medicine', 'health'
+        'medicine', 'health', 'chemist', 'drug',
+        'nursing', 'care', 'dental', 'eye'
     ]
 
     entertainment_keywords = [
         'netflix', 'prime', 'hotstar', 'spotify',
         'youtube', 'movie', 'theatre', 'cinema',
-        'pvr', 'inox', 'game', 'disney'
+        'pvr', 'inox', 'game', 'disney', 'zee5',
+        'sonyliv', 'bookmyshow'
     ]
 
     education_keywords = [
         'udemy', 'coursera', 'college', 'school',
         'university', 'book', 'course', 'tuition',
-        'fees', 'exam'
+        'fees', 'exam', 'coaching', 'academy'
     ]
 
     for keyword in food_keywords:

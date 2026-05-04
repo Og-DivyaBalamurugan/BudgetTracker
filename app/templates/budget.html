@@ -6,6 +6,26 @@
 
 <div class="page-header">
     <h2>💰 Budget Manager</h2>
+    <div class="month-switcher">
+        <!-- Previous month link -->
+        {% if month == 1 %}
+            <a href="{{ url_for('budget.index', month=12, year=year-1) }}" class="btn-switch">← Prev</a>
+        {% else %}
+            <a href="{{ url_for('budget.index', month=month-1, year=year) }}" class="btn-switch">← Prev</a>
+        {% endif %}
+
+        <span class="current-month-label">
+            {% set month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
+            {{ month_names[month] }} {{ year }}
+        </span>
+
+        <!-- Next month link -->
+        {% if month == 12 %}
+            <a href="{{ url_for('budget.index', month=1, year=year+1) }}" class="btn-switch">Next →</a>
+        {% else %}
+            <a href="{{ url_for('budget.index', month=month+1, year=year) }}" class="btn-switch">Next →</a>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Set Budget Form -->

@@ -1,16 +1,4 @@
-'''# app/budget.py
-from flask import Blueprint, render_template
-from flask_login import login_required
-
-budget = Blueprint('budget', __name__)
-
-@budget.route('/budget')
-@login_required
-def index():
-    return render_template('budget.html')'''
-    
-    
-    # app/budget.py
+# app/budget.py
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app import mysql
@@ -21,18 +9,23 @@ budget = Blueprint('budget', __name__)
 @login_required
 def index():
     cursor = mysql.connection.cursor()
-    
+
     # Get current month and year
     cursor.execute("SELECT MONTH(NOW()) as month, YEAR(NOW()) as year")
     current_date = cursor.fetchone()
-    month = current_date['month']
-    year = current_date['year']
-    
+    current_month = current_date['month']
+    current_year = current_date['year']
+
+    # Allow viewing other months via query params
+    # e.g. /budget?month=4&year=2026
+    month = int(request.args.get('month', current_month))
+    year = int(request.args.get('year', current_year))
+
     # Get all categories
     cursor.execute("SELECT * FROM categories")
     categories = cursor.fetchall()
-    
-    # Get budgets for current month
+
+    # Get budgets for selected month
     cursor.execute("""
         SELECT b.*, c.name as category_name, c.icon as category_icon
         FROM budgets b
@@ -40,8 +33,8 @@ def index():
         WHERE b.user_id = %s AND b.month = %s AND b.year = %s
     """, (current_user.id, month, year))
     budgets = cursor.fetchall()
-    
-    # Get actual spending per category this month
+
+    # Get actual spending per category for selected month
     cursor.execute("""
         SELECT c.id, c.name, c.icon,
         COALESCE(SUM(t.amount), 0) as spent
@@ -54,17 +47,17 @@ def index():
         GROUP BY c.id, c.name, c.icon
     """, (current_user.id, month, year))
     spending = cursor.fetchall()
-    
-    # Convert spending to dictionary for easy lookup
+
+    # Convert spending to dictionary
     spending_dict = {s['id']: s['spent'] for s in spending}
-    
+
     # Calculate warning status for each budget
     budget_status = []
     for b in budgets:
         spent = float(spending_dict.get(b['category_id'], 0))
         budget_amount = float(b['amount'])
         percentage = (spent / budget_amount * 100) if budget_amount > 0 else 0
-        
+
         if percentage >= 100:
             status = 'danger'
             status_text = 'Exceeded!'
@@ -74,7 +67,7 @@ def index():
         else:
             status = 'safe'
             status_text = 'On track'
-        
+
         budget_status.append({
             'id': b['id'],
             'category_id': b['category_id'],
@@ -86,14 +79,16 @@ def index():
             'status': status,
             'status_text': status_text
         })
-    
+
     cursor.close()
-    
+
     return render_template('budget.html',
         categories=categories,
         budget_status=budget_status,
         month=month,
-        year=year
+        year=year,
+        current_month=current_month,
+        current_year=current_year
     )
 
 @budget.route('/budget/set', methods=['POST'])
@@ -103,19 +98,17 @@ def set_budget():
     amount = request.form['amount']
     month = request.form['month']
     year = request.form['year']
-    
+
     cursor = mysql.connection.cursor()
     try:
-        # Check if budget already exists for this category and month
         cursor.execute("""
             SELECT id FROM budgets
             WHERE user_id = %s AND category_id = %s
             AND month = %s AND year = %s
         """, (current_user.id, category_id, month, year))
         existing = cursor.fetchone()
-        
+
         if existing:
-            # Update existing budget
             cursor.execute("""
                 UPDATE budgets SET amount = %s
                 WHERE user_id = %s AND category_id = %s
@@ -123,20 +116,20 @@ def set_budget():
             """, (amount, current_user.id, category_id, month, year))
             flash('Budget updated successfully!', 'success')
         else:
-            # Create new budget
             cursor.execute("""
                 INSERT INTO budgets (user_id, category_id, amount, month, year)
                 VALUES (%s, %s, %s, %s, %s)
             """, (current_user.id, category_id, amount, month, year))
             flash('Budget set successfully!', 'success')
-        
+
         mysql.connection.commit()
     except:
         flash('Error setting budget!', 'danger')
     finally:
         cursor.close()
-    
-    return redirect(url_for('budget.index'))
+
+    # Redirect back to same month view
+    return redirect(url_for('budget.index', month=month, year=year))
 
 @budget.route('/budget/delete/<int:id>', methods=['POST'])
 @login_required
@@ -153,5 +146,5 @@ def delete_budget(id):
         flash('Error deleting budget!', 'danger')
     finally:
         cursor.close()
-    
+
     return redirect(url_for('budget.index'))

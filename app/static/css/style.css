@@ -724,3 +724,38 @@ td.expense {
     font-size: 12px;
     color: #888;
 }
+
+/* ===========================
+   Month Switcher
+=========================== */
+.month-switcher {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.btn-switch {
+    background: white;
+    border: 1.5px solid #ddd;
+    padding: 8px 16px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #2c3e50;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.btn-switch:hover {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.current-month-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    min-width: 150px;
+    text-align: center;
+}
